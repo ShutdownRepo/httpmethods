@@ -191,9 +191,9 @@ def print_results(console, results):
 
 
 def json_export(results, json_file):
-        f = open(json_file, "w")
-        f.write(json.dumps(results, indent=4) + "\n")
-        f.close()
+    f = open(json_file, "w")
+    f.write(json.dumps(results, indent=4) + "\n")
+    f.close()
 
 
 def main(options, logger, console):
