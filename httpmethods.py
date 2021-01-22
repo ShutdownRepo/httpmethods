@@ -12,8 +12,9 @@ import requests
 from rich.console import Console
 from rich import box
 from rich.table import Table
-import urllib3
 import json
+
+banner = "[~] HTTP Methods Tester, v1.0.2\n"
 
 methods = [
     'CHECKIN', 'CHECKOUT', 'CONNECT', 'COPY', 'DELETE', 'GET', 'HEAD', 'INDEX',
@@ -22,6 +23,7 @@ methods = [
     'SHOWMETHOD', 'SPACEJUMP', 'TEXTSEARCH', 'TRACE', 'TRACK', 'UNCHECKOUT',
     'UNLINK', 'UNLOCK', 'VERSION-CONTROL'
 ]
+
 
 class Logger:
     def __init__(self, verbosity=0, quiet=False):
@@ -119,8 +121,17 @@ def get_options():
     return options
 
 
-def methods_from_http_options(url, verify):
-    methods = []
+def methods_from_wordlist(wordlist):
+    logger.verbose(f"Retrieving methods from wordlist {wordlist}")
+    try:
+        with open(options.wordlist, "r") as infile:
+            methods += infile.read().split()
+    except Exception as e:
+        logger.error("Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
+
+
+def methods_from_http_options(console, url, verify):
+    options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     r = requests.options(url=options.url, verify=options.verify)
     if r.status_code == 200:
@@ -128,50 +139,37 @@ def methods_from_http_options(url, verify):
         logger.debug(r.headers)
         if "Allow" in r.headers:
             logger.info("URL answers with a list of options: {}".format(r.headers["Allow"]))
-            for method in r.headers["Allow"].replace(" ", "").split(","):
-                if method not in methods:
-                    logger.debug(f"Adding new method {method} to methods")
-                    methods.append(method)
-                else:
-                    logger.debug(f"Method {method} already in known methods, passing")
+            include_options_methods = console.input(
+                "[bold orange3][?][/bold orange3] Do you want to add these methods to the test (be careful, some methods can be dangerous)? [Y/n] ")
+            if not include_options_methods.lower() == "n":
+                for method in r.headers["Allow"].replace(" ", "").split(","):
+                    if method not in options_methods:
+                        logger.debug(f"Adding new method {method} to methods")
+                        options_methods.append(method)
+                    else:
+                        logger.debug(f"Method {method} already in known methods, passing")
+            else:
+                logger.debug("Methods found with OPTIONS won't be added to the tested methods")
         else:
             logger.verbose("URL doesn't answer with a list of options")
     else:
         logger.verbose("URL rejects OPTIONS")
-    return methods
+    return options_methods
 
 
 def test_method(method, url, verify, results):
     r = requests.request(
         method=method,
         url=url,
-        verify=verify, # this is to set the client to accept insecure servers
-        stream=True    # this is to prevent the download of huge files, focus on the request, not on the data
+        verify=verify,  # this is to set the client to accept insecure servers
+        stream=True  # this is to prevent the download of huge files, focus on the request, not on the data
     )
     logger.debug(f"Obtained results: {method}, {str(r.status_code)}, {r.reason}")
     results[method] = {"status_code": r.status_code, "reason": r.reason[:100]}
 
 
-def main(options, logger, console):
-    logger.info("Starting HTTP verb enumerating and tampering")
-    global methods
-    # Retreiving methods from wordlist
-    if options.wordlist != None:
-        with open(options.wordlist, "r") as infile:
-            methods += infile.read().split()
-    results = {}
-    methods += methods_from_http_options(options.url, options.verify)
-
-    # Waits for all the threads to be completed
-    with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
-        for method in methods:
-            tp.submit(test_method, method, options.url, options.verify, results)
-    # It is blocking until all the threads are completed
-
-    # Sorting the results by method name
-    results = {key: results[key] for key in sorted(results)}
-
-    # Parsing and print results
+def print_results(console, results):
+    logger.verbose("Parsing  & printing results")
     table = Table(show_header=True, header_style="bold blue", border_style="blue", box=box.SIMPLE)
     table.add_column("Method")
     table.add_column("Status code")
@@ -181,7 +179,8 @@ def main(options, logger, console):
             style = "green"
         elif result[1]["status_code"] == 502:  # This probably means the method is accepted but request was malformed
             style = "yellow4"
-        elif (500 <= result[1]["status_code"] <= 599) and result[1]["status_code"] != 502:  # This means the method is not implemented in most cases
+        elif (500 <= result[1]["status_code"] <= 599) and result[1][
+            "status_code"] != 502:  # This means the method is not implemented in most cases
             style = "orange3"
         elif 400 <= result[1]["status_code"] <= 499:  # This means the method is disabled in most cases
             style = "red"
@@ -190,21 +189,55 @@ def main(options, logger, console):
         table.add_row(result[0], str(result[1]["status_code"]), result[1]["reason"], style=style)
     console.print(table)
 
-    # Export to JSON if specified
-    if options.jsonfile != None:
-        f = open(options.jsonfile, "w")
-        f.write(json.dumps(results, indent=4)+"\n")
+
+def json_export(results, json_file):
+        f = open(json_file, "w")
+        f.write(json.dumps(results, indent=4) + "\n")
         f.close()
 
+
+def main(options, logger, console):
+    logger.info("Starting HTTP verb enumerating and tampering")
+    global methods
+    results = {}
+    if options.wordlist is not None:
+        methods += methods_from_wordlist(options.wordlist)
+    methods += methods_from_http_options(console, options.url, options.verify)
+    methods = [m.upper() for m in methods]
+    methods = list(set(methods))
+    for method in methods:
+        if method in ["DELETE", "COPY", "PUT", "PATCH"]:
+            test_dangerous_method = console.input(
+                f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? \[y/N] ")
+            if not test_dangerous_method.lower() == "y":
+                logger.verbose(f"Method {method} will not be tested")
+                methods.remove(method)
+            else:
+                logger.verbose(f"Method {method} will be tested")
+
+    # Waits for all the threads to be completed
+    with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
+        for method in methods:
+            tp.submit(test_method, method, options.url, options.verify, results)
+
+    # Sorting the results by method name
+    results = {key: results[key] for key in sorted(results)}
+
+    # Parsing and print results
+    print_results(console, results)
+
+    # Export to JSON if specified
+    if options.jsonfile is not None:
+        json_export(results, options.jsonfile)
 
 
 if __name__ == '__main__':
     try:
-        print("HTTP Methods Tester, v1.0.1\n")
+        print(banner)
         options = get_options()
-        logger  = Logger(options.verbosity, options.quiet)
+        logger = Logger(options.verbosity, options.quiet)
         console = Console()
-        if options.verify == False:
+        if not options.verify:
             # Disable warings of insecure connection for invalid cerificates
             requests.packages.urllib3.disable_warnings()
             # Allow use of deprecated and weak cipher methods

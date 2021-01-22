@@ -1,0 +1,7 @@
+# PyCharm workspace
+.idea/
+
+# Python install files
+build/
+dist/
+*.egg-info/

@@ -1,26 +1,26 @@
 # HTTP Methods Tester
 
-With this script, you can test various HTTP methods against an URL. This can be useful to look for HTTP verb tampering vulnerabilities for example.
+With this script, you can test various HTTP methods against an URL. This can be useful to look for HTTP verb tampering vulnerabilities and dangerous HTTP methods.
 
 ## Setup
 
 Clone the repository and install the dependencies :
 
 ```sh
-git clone https://github.com/apache-strike/HTTP-verb-tempering.git && cd HTTP-verb-tempering
-python3 -m pip install requirements.txt
+git clone https://github.com/apache-strike/httpmethods
+cd httpmethods
+python3 setup.py install
 ```
 
 ## Usage
 
 ```sh
-python3 http_verb_tempering.py -u http://www.example.com/
+httpmethods -u http://www.example.com/
 ```
 
 You can find here a complete list of options :
 
 ```
-$ ./http_verb_tempering.py -h
 HTTP Methods Tester, v1.0.1
 usage: http_verb_tempering.py [-h] -u URL [-v] [-q] [-k] [-w WORDLIST]
                               [-t THREADS] [-j JSONFILE]
