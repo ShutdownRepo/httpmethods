@@ -21,8 +21,8 @@ httpmethods -u http://www.example.com/
 You can find here a complete list of options :
 
 ```
-HTTP Methods Tester, v1.0.1
-usage: http_verb_tempering.py [-h] -u URL [-v] [-q] [-k] [-w WORDLIST]
+HTTP Methods Tester, v1.0.2
+usage: httpmethods.py [-h] -u URL [-v] [-q] [-k] [-w WORDLIST]
                               [-t THREADS] [-j JSONFILE]
 
 This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP methods enumeration to find dangerous enabled methods like PUT
