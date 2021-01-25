@@ -13,7 +13,7 @@ shutil.copyfile('httpmethods.py', 'httpmethods')
 
 setup(
     name='httpmethods',
-    version='1.0.0',
+    version='1.1.0',
     author='Shutdown',
     description='HTTP verb tampering & methods enumeration  ',
     long_description=long_description,

@@ -14,7 +14,7 @@ from rich import box
 from rich.table import Table
 import json
 
-banner = "[~] HTTP Methods Tester, v1.0.2\n"
+banner = "[~] HTTP Methods Tester, v1.1.0\n"
 
 methods = [
     'CHECKIN', 'CHECKOUT', 'CONNECT', 'COPY', 'DELETE', 'GET', 'HEAD', 'INDEX',
@@ -203,17 +203,26 @@ def main(options, logger, console):
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
     methods += methods_from_http_options(console, options.url, options.verify)
+
+    # Sort uniq
     methods = [m.upper() for m in methods]
-    methods = list(set(methods))
+    methods = sorted(list(set(methods)))
+
+    # Filtering for dangerous methods
+    filtered_methods = []
     for method in methods:
         if method in ["DELETE", "COPY", "PUT", "PATCH"]:
             test_dangerous_method = console.input(
                 f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? \[y/N] ")
             if not test_dangerous_method.lower() == "y":
                 logger.verbose(f"Method {method} will not be tested")
-                methods.remove(method)
             else:
                 logger.verbose(f"Method {method} will be tested")
+                filtered_methods.append(method)
+        else:
+            filtered_methods.append(method)
+    methods = filtered_methods[:]
+    del filtered_methods
 
     # Waits for all the threads to be completed
     with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
