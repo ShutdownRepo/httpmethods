@@ -14,6 +14,7 @@ from rich.console import Console
 from rich import box
 from rich.table import Table
 import json
+from http.cookies import SimpleCookie
 
 banner = "[~] HTTP Methods Tester, v1.1.2\n"
 
@@ -138,6 +139,12 @@ def get_options():
         dest='proxy',
         help="Specify a proxy to use for requests (e.g., http://localhost:8080)"
     )
+    parser.add_argument(
+        '-b', '--cookies',
+        action="store",
+        default=None,
+        dest='cookies',
+        help='Specify cookies to use in requests. (e.g., --cookies "cookie1=blah;cookie2=blah")')
     options = parser.parse_args()
     return options
 
@@ -151,13 +158,14 @@ def methods_from_wordlist(wordlist):
         logger.error("Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
 
 
-def methods_from_http_options(console, options, proxies):
+def methods_from_http_options(console, options, proxies, cookies):
     options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     try:
         r = requests.options(
             url=options.url,
             proxies=proxies,
+            cookies=cookies,
             verify=options.verify
         )
     except requests.exceptions.ProxyError:
@@ -186,13 +194,14 @@ def methods_from_http_options(console, options, proxies):
     return options_methods
 
 
-def test_method(options, method, proxies, results):
+def test_method(options, method, proxies, cookies, results):
     try:
         r = requests.request(
             method=method,
             url=options.url,
             verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
+            cookies=cookies,
             allow_redirects=options.redirect,
             stream=True,  # this is to prevent the download of huge files, focus on the request, not on the data
         )
@@ -254,9 +263,17 @@ def main(options, logger, console):
         logger.debug("Setting proxies to 'None'")
         proxies = None
 
+    #Parsing cookie option
+    if options.cookies:
+        cookie = SimpleCookie()
+        cookie.load(options.cookies)
+        cookies = {key: value.value for key, value in cookie.items()}
+    else:
+        cookies = {}
+
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
-    methods += methods_from_http_options(console, options, proxies)
+    methods += methods_from_http_options(console, options, proxies, cookies)
 
     # Sort uniq
     methods = [m.upper() for m in methods]
@@ -281,7 +298,7 @@ def main(options, logger, console):
     # Waits for all the threads to be completed
     with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
         for method in methods:
-            tp.submit(test_method, options, method, proxies, results)
+            tp.submit(test_method, options, method, proxies, cookies, results)
 
     # Sorting the results by method name
     results = {key: results[key] for key in sorted(results)}
