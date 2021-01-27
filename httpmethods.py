@@ -265,7 +265,7 @@ def main(options, logger, console):
     # Filtering for dangerous methods
     filtered_methods = []
     for method in methods:
-        if method in ["DELETE", "COPY", "PUT", "PATCH"]:
+        if method in ["DELETE", "COPY", "PUT", "PATCH", "UNCHECKOUT"]:
             test_dangerous_method = console.input(
                 f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? \[y/N] ")
             if not test_dangerous_method.lower() == "y":
