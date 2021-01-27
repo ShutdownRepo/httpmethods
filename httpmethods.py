@@ -7,6 +7,7 @@
 # Python Version     : 3.*
 
 import argparse
+import sys
 from concurrent.futures import ThreadPoolExecutor
 import requests
 from rich.console import Console
@@ -14,7 +15,7 @@ from rich import box
 from rich.table import Table
 import json
 
-banner = "[~] HTTP Methods Tester, v1.1.0\n"
+banner = "[~] HTTP Methods Tester, v1.1.2\n"
 
 methods = [
     'CHECKIN', 'CHECKOUT', 'CONNECT', 'COPY', 'DELETE', 'GET', 'HEAD', 'INDEX',
@@ -64,7 +65,10 @@ def get_options():
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument('-u', "--url", required=True, help="e.g. https://example.com:port/path")
+    parser.add_argument(
+        "url",
+        help="e.g. https://example.com:port/path"
+    )
     parser.add_argument(
         "-v",
         "--verbose",
@@ -89,6 +93,15 @@ def get_options():
         default=True,
         required=False,
         help="Allow insecure server connections when using SSL (default: False)",
+    )
+    parser.add_argument(
+        "-L",
+        "--location",
+        dest="redirect",
+        action="store_true",
+        default=False,
+        required=False,
+        help="Follow redirects (default: False)",
     )
     parser.add_argument(
         "-w",
@@ -118,13 +131,13 @@ def get_options():
         help="Save results to specified JSON file.",
     )
     parser.add_argument(
-    '-p',
-    '--proxy',
-    action="store",
-    default=None,
-    dest='proxy',
-    help="Specify a proxy to use for requests \
-            (e.g., http://localhost:8080)")
+        '-x',
+        '--proxy',
+        action="store",
+        default=None,
+        dest='proxy',
+        help="Specify a proxy to use for requests (e.g., http://localhost:8080)"
+    )
     options = parser.parse_args()
     return options
 
@@ -138,11 +151,15 @@ def methods_from_wordlist(wordlist):
         logger.error("Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
 
 
-def methods_from_http_options(console, url, proxies, verify):
+def methods_from_http_options(console, options, proxies):
     options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     try:
-        r = requests.options(url=options.url, proxies=proxies, verify=options.verify)
+        r = requests.options(
+            url=options.url,
+            proxies=proxies,
+            verify=options.verify
+        )
     except requests.exceptions.ProxyError:
         logger.error("Invalid proxy specified ")
         raise SystemExit
@@ -169,24 +186,25 @@ def methods_from_http_options(console, url, proxies, verify):
     return options_methods
 
 
-def test_method(method, url, verify, proxies, results):
+def test_method(options, method, proxies, results):
     try:
         r = requests.request(
             method=method,
-            url=url,
-            verify=verify,  # this is to set the client to accept insecure servers
+            url=options.url,
+            verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
-            stream=True  # this is to prevent the download of huge files, focus on the request, not on the data
+            allow_redirects=options.redirect,
+            stream=True,  # this is to prevent the download of huge files, focus on the request, not on the data
         )
     except requests.exceptions.ProxyError:
         logger.error("Invalid proxy specified ")
         raise SystemExit
-    logger.debug(f"Obtained results: {method}, {str(r.status_code)}, {r.reason}")
+    logger.debug(f"Obtained results: {method}, {str(r.status_code)}, {str(len(r.text))}, {r.reason}")
     results[method] = {"status_code": r.status_code, "length": len(r.text), "reason": r.reason[:100]}
 
 
 def print_results(console, results):
-    logger.verbose("Parsing  & printing results")
+    logger.verbose("Parsing & printing results")
     table = Table(show_header=True, header_style="bold blue", border_style="blue", box=box.SIMPLE)
     table.add_column("Method")
     table.add_column("Status code")
@@ -195,13 +213,15 @@ def print_results(console, results):
     for result in results.items():
         if result[1]["status_code"] == 200:  # This means the method is accepted
             style = "green"
-        elif result[1]["status_code"] == 502:  # This probably means the method is accepted but request was malformed
-            style = "yellow4"
+        elif (300 <= result[1]["status_code"] <= 399):
+            style = "cyan"
+        elif 400 <= result[1]["status_code"] <= 499:  # This means the method is disabled in most cases
+            style = "red"
         elif (500 <= result[1]["status_code"] <= 599) and result[1][
             "status_code"] != 502:  # This means the method is not implemented in most cases
             style = "orange3"
-        elif 400 <= result[1]["status_code"] <= 499:  # This means the method is disabled in most cases
-            style = "red"
+        elif result[1]["status_code"] == 502:  # This probably means the method is accepted but request was malformed
+            style = "yellow4"
         else:
             style = None
         table.add_row(result[0], str(result[1]["status_code"]), str(result[1]["length"]), result[1]["reason"], style=style)
@@ -225,16 +245,18 @@ def main(options, logger, console):
             proxies = {"http": "http://" + options.proxy.split('//')[1],
                        "https": "http://" + options.proxy.split('//')[1]
                        }
+            logger.debug(f"Setting proxies to {str(proxies)}")
         except (IndexError, ValueError):
             logger.error("Invalid proxy specified ")
             sys.exit(1)
 
     else:
+        logger.debug("Setting proxies to 'None'")
         proxies = None
 
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
-    methods += methods_from_http_options(console, options.url, proxies, options.verify)
+    methods += methods_from_http_options(console, options, proxies)
 
     # Sort uniq
     methods = [m.upper() for m in methods]
@@ -259,7 +281,7 @@ def main(options, logger, console):
     # Waits for all the threads to be completed
     with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
         for method in methods:
-            tp.submit(test_method, method, options.url, options.verify, proxies, results)
+            tp.submit(test_method, options, method, proxies, results)
 
     # Sorting the results by method name
     results = {key: results[key] for key in sorted(results)}
