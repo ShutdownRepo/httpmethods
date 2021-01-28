@@ -216,8 +216,8 @@ def print_results(console, results):
     logger.verbose("Parsing & printing results")
     table = Table(show_header=True, header_style="bold blue", border_style="blue", box=box.SIMPLE)
     table.add_column("Method")
-    table.add_column("Status code")
     table.add_column("Length")
+    table.add_column("Status code")
     table.add_column("Reason")
     for result in results.items():
         if result[1]["status_code"] == 200:  # This means the method is accepted
@@ -233,9 +233,8 @@ def print_results(console, results):
             style = "yellow4"
         else:
             style = None
-        table.add_row(result[0], str(result[1]["status_code"]), str(result[1]["length"]), result[1]["reason"], style=style)
+        table.add_row(result[0], str(result[1]["length"]), str(result[1]["status_code"]), result[1]["reason"], style=style)
     console.print(table)
-
 
 def json_export(results, json_file):
     f = open(json_file, "w")
