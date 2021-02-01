@@ -16,7 +16,7 @@ from rich.table import Table
 import json
 from http.cookies import SimpleCookie
 
-banner = "[~] HTTP Methods Tester, v1.1.2\n"
+banner = "[~] HTTP Methods Tester, v1.1.3\n"
 
 methods = [
     'CHECKIN', 'CHECKOUT', 'CONNECT', 'COPY', 'DELETE', 'GET', 'HEAD', 'INDEX',
@@ -84,7 +84,7 @@ def get_options():
         dest="quiet",
         action="store_true",
         default=False,
-        help="Show no informations at all",
+        help="Show no information at all",
     )
     parser.add_argument(
         "-k",
@@ -144,7 +144,8 @@ def get_options():
         action="store",
         default=None,
         dest='cookies',
-        help='Specify cookies to use in requests. (e.g., --cookies "cookie1=blah;cookie2=blah")')
+        help='Specify cookies to use in requests. (e.g., --cookies "cookie1=blah;cookie2=blah")'
+    )
     options = parser.parse_args()
     return options
 
@@ -155,7 +156,7 @@ def methods_from_wordlist(wordlist):
         with open(options.wordlist, "r") as infile:
             methods += infile.read().split()
     except Exception as e:
-        logger.error("Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
+        logger.error(f"Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
 
 
 def methods_from_http_options(console, options, proxies, cookies):
