@@ -1,10 +1,5 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# File name          :
-# Author             :
-# Date created       :
-# Date last modified :
-# Python Version     : 3.*
 
 import argparse
 import sys
@@ -27,7 +22,7 @@ methods = [
 ]
 
 
-class Logger:
+class Logger(object):
     def __init__(self, verbosity=0, quiet=False):
         self.verbosity = verbosity
         self.quiet = quiet
@@ -248,12 +243,13 @@ def main(options, logger, console):
     global methods
     results = {}
 
-    #Verifying the proxy option
+    # Verifying the proxy option
     if options.proxy:
         try:
-            proxies = {"http": "http://" + options.proxy.split('//')[1],
-                       "https": "http://" + options.proxy.split('//')[1]
-                       }
+            proxies = {
+                "http": "http://" + options.proxy.split('//')[1],
+                "https": "http://" + options.proxy.split('//')[1]
+            }
             logger.debug(f"Setting proxies to {str(proxies)}")
         except (IndexError, ValueError):
             logger.error("Invalid proxy specified ")
@@ -263,7 +259,7 @@ def main(options, logger, console):
         logger.debug("Setting proxies to 'None'")
         proxies = None
 
-    #Parsing cookie option
+    # Parsing cookie option
     if options.cookies:
         cookie = SimpleCookie()
         cookie.load(options.cookies)
