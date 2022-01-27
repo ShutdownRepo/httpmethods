@@ -51,9 +51,9 @@ class Logger(object):
         if not self.quiet:
             console.print("{}[!]{} {}".format("[bold red]", "[/bold red]", message), highlight=False)
 
+
 def get_options():
-    description = "This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP " \
-                  "methods enumeration to find dangerous enabled methods like PUT "
+    description = "This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP methods enumeration to find dangerous enabled methods like PUT "
 
     parser = argparse.ArgumentParser(
         description=description,
@@ -142,12 +142,12 @@ def get_options():
     )
     parser.add_argument(
         '-H',
-        '--headers',
+        '--header',
         default=[],
         dest='headers',
         action='append',
         required=False,
-        help='Specify headers to use in requests. (e.g., --headers "header1:blah" --headers "header2:blah")'
+        help='Specify headers to use in requests. (e.g., --header "Header1: Value1" --header "Header2: Value2")'
     )
     options = parser.parse_args()
     return options
@@ -198,6 +198,7 @@ def methods_from_http_options(console, options, proxies, headers, cookies):
         logger.verbose("URL rejects OPTIONS")
     return options_methods
 
+
 def test_method(options, method, proxies, cookies, headers, results):
     try:
         r = requests.request(
@@ -227,12 +228,11 @@ def print_results(console, results):
     for result in results.items():
         if result[1]["status_code"] == 200:  # This means the method is accepted
             style = "green"
-        elif (300 <= result[1]["status_code"] <= 399):
+        elif 300 <= result[1]["status_code"] <= 399:
             style = "cyan"
         elif 400 <= result[1]["status_code"] <= 499:  # This means the method is disabled in most cases
             style = "red"
-        elif (500 <= result[1]["status_code"] <= 599) and result[1][
-            "status_code"] != 502:  # This means the method is not implemented in most cases
+        elif (500 <= result[1]["status_code"] <= 599) and result[1]["status_code"] != 502:  # This means the method is not implemented in most cases
             style = "orange3"
         elif result[1]["status_code"] == 502:  # This probably means the method is accepted but request was malformed
             style = "yellow4"
@@ -240,6 +240,7 @@ def print_results(console, results):
             style = None
         table.add_row(result[0], str(result[1]["length"]), str(result[1]["status_code"]), result[1]["reason"], style=style)
     console.print(table)
+
 
 def json_export(results, json_file):
     f = open(json_file, "w")
@@ -277,7 +278,7 @@ def main(options, logger, console):
         cookies = {}
 
     if options.headers:
-        headers = {h.split(':', 1)[0]: h.split(':', 1)[1] for h in options.headers}
+        headers = {h.split(':', 1)[0]: h.split(':', 1)[1].strip() for h in options.headers}
     else:
         headers = []
 
