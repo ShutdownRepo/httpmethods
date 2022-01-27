@@ -198,7 +198,6 @@ def methods_from_http_options(console, options, proxies, headers, cookies):
         logger.verbose("URL rejects OPTIONS")
     return options_methods
 
-
 def test_method(options, method, proxies, cookies, headers, results):
     try:
         r = requests.request(
@@ -309,7 +308,7 @@ def main(options, logger, console):
     # Waits for all the threads to be completed
     with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
         for method in methods:
-            tp.submit(test_method, options, method, proxies, cookies, results)
+            tp.submit(test_method, options, method, proxies, cookies, headers, results)
 
     # Sorting the results by method name
     results = {key: results[key] for key in sorted(results)}
