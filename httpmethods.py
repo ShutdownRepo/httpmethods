@@ -51,15 +51,6 @@ class Logger(object):
         if not self.quiet:
             console.print("{}[!]{} {}".format("[bold red]", "[/bold red]", message), highlight=False)
 
-
-class store_dict(argparse.Action):
-    def __call__(self, parser, namespace, values, option_string=None):
-        headers = {}
-        for kv in values.split(","):
-            k, v = kv.split(":")
-            headers[k] = v
-        setattr(namespace, self.dest, headers)
-
 def get_options():
     description = "This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP " \
                   "methods enumeration to find dangerous enabled methods like PUT "
@@ -152,11 +143,11 @@ def get_options():
     parser.add_argument(
         '-H',
         '--headers',
-        default=None,
+        default=[],
         dest='headers',
-        action=store_dict,
+        action='append',
         required=False,
-        help='Specify headers to use in requests. (e.g., --headers "header1:blah;header2:blah")'
+        help='Specify headers to use in requests. (e.g., --headers "header1:blah" --headers "header2:blah")'
     )
     options = parser.parse_args()
     return options
@@ -171,7 +162,7 @@ def methods_from_wordlist(wordlist):
         logger.error(f"Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
 
 
-def methods_from_http_options(console, options, proxies, cookies):
+def methods_from_http_options(console, options, proxies, headers, cookies):
     options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     try:
@@ -179,7 +170,7 @@ def methods_from_http_options(console, options, proxies, cookies):
             url=options.url,
             proxies=proxies,
             cookies=cookies,
-            headers=options.headers,
+            headers=headers,
             verify=options.verify
         )
     except requests.exceptions.ProxyError:
@@ -208,7 +199,7 @@ def methods_from_http_options(console, options, proxies, cookies):
     return options_methods
 
 
-def test_method(options, method, proxies, cookies, results):
+def test_method(options, method, proxies, cookies, headers, results):
     try:
         r = requests.request(
             method=method,
@@ -216,7 +207,7 @@ def test_method(options, method, proxies, cookies, results):
             verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
             cookies=cookies,
-            headers=options.headers,
+            headers=headers,
             allow_redirects=options.redirect,
             stream=True,  # this is to prevent the download of huge files, focus on the request, not on the data
         )
@@ -286,9 +277,14 @@ def main(options, logger, console):
     else:
         cookies = {}
 
+    if options.headers:
+        headers = {h.split(':', 1)[0]: h.split(':', 1)[1] for h in options.headers}
+    else:
+        headers = []
+
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
-    methods += methods_from_http_options(console, options, proxies, cookies)
+    methods += methods_from_http_options(console, options, proxies, headers, cookies)
 
     # Sort uniq
     methods = [m.upper() for m in methods]
