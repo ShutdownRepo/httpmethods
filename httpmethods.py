@@ -51,7 +51,6 @@ class Logger(object):
         if not self.quiet:
             console.print("{}[!]{} {}".format("[bold red]", "[/bold red]", message), highlight=False)
 
-
 def get_options():
     description = "This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP " \
                   "methods enumeration to find dangerous enabled methods like PUT "
@@ -141,6 +140,15 @@ def get_options():
         dest='cookies',
         help='Specify cookies to use in requests. (e.g., --cookies "cookie1=blah;cookie2=blah")'
     )
+    parser.add_argument(
+        '-H',
+        '--headers',
+        default=[],
+        dest='headers',
+        action='append',
+        required=False,
+        help='Specify headers to use in requests. (e.g., --headers "header1:blah" --headers "header2:blah")'
+    )
     options = parser.parse_args()
     return options
 
@@ -154,7 +162,7 @@ def methods_from_wordlist(wordlist):
         logger.error(f"Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
 
 
-def methods_from_http_options(console, options, proxies, cookies):
+def methods_from_http_options(console, options, proxies, headers, cookies):
     options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     try:
@@ -162,6 +170,7 @@ def methods_from_http_options(console, options, proxies, cookies):
             url=options.url,
             proxies=proxies,
             cookies=cookies,
+            headers=headers,
             verify=options.verify
         )
     except requests.exceptions.ProxyError:
@@ -189,8 +198,7 @@ def methods_from_http_options(console, options, proxies, cookies):
         logger.verbose("URL rejects OPTIONS")
     return options_methods
 
-
-def test_method(options, method, proxies, cookies, results):
+def test_method(options, method, proxies, cookies, headers, results):
     try:
         r = requests.request(
             method=method,
@@ -198,6 +206,7 @@ def test_method(options, method, proxies, cookies, results):
             verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
             cookies=cookies,
+            headers=headers,
             allow_redirects=options.redirect,
             stream=True,  # this is to prevent the download of huge files, focus on the request, not on the data
         )
@@ -267,9 +276,14 @@ def main(options, logger, console):
     else:
         cookies = {}
 
+    if options.headers:
+        headers = {h.split(':', 1)[0]: h.split(':', 1)[1] for h in options.headers}
+    else:
+        headers = []
+
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
-    methods += methods_from_http_options(console, options, proxies, cookies)
+    methods += methods_from_http_options(console, options, proxies, headers, cookies)
 
     # Sort uniq
     methods = [m.upper() for m in methods]
@@ -294,7 +308,7 @@ def main(options, logger, console):
     # Waits for all the threads to be completed
     with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
         for method in methods:
-            tp.submit(test_method, options, method, proxies, cookies, results)
+            tp.submit(test_method, options, method, proxies, cookies, headers, results)
 
     # Sorting the results by method name
     results = {key: results[key] for key in sorted(results)}
@@ -314,7 +328,7 @@ if __name__ == '__main__':
         logger = Logger(options.verbosity, options.quiet)
         console = Console()
         if not options.verify:
-            # Disable warings of insecure connection for invalid cerificates
+            # Disable warnings of insecure connection for invalid cerificates
             requests.packages.urllib3.disable_warnings()
             # Allow use of deprecated and weak cipher methods
             requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS += ':HIGH:!DH:!aNULL'
