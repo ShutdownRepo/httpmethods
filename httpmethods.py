@@ -52,6 +52,14 @@ class Logger(object):
             console.print("{}[!]{} {}".format("[bold red]", "[/bold red]", message), highlight=False)
 
 
+class store_dict(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        headers = {}
+        for kv in values.split(","):
+            k, v = kv.split(":")
+            headers[k] = v
+        setattr(namespace, self.dest, headers)
+
 def get_options():
     description = "This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP " \
                   "methods enumeration to find dangerous enabled methods like PUT "
@@ -141,6 +149,15 @@ def get_options():
         dest='cookies',
         help='Specify cookies to use in requests. (e.g., --cookies "cookie1=blah;cookie2=blah")'
     )
+    parser.add_argument(
+        '-H',
+        '--headers',
+        default=None,
+        dest='headers',
+        action=store_dict,
+        required=False,
+        help='Specify headers to use in requests. (e.g., --headers "header1:blah;header2:blah")'
+    )
     options = parser.parse_args()
     return options
 
@@ -162,6 +179,7 @@ def methods_from_http_options(console, options, proxies, cookies):
             url=options.url,
             proxies=proxies,
             cookies=cookies,
+            headers=options.headers,
             verify=options.verify
         )
     except requests.exceptions.ProxyError:
@@ -198,6 +216,7 @@ def test_method(options, method, proxies, cookies, results):
             verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
             cookies=cookies,
+            headers=options.headers,
             allow_redirects=options.redirect,
             stream=True,  # this is to prevent the download of huge files, focus on the request, not on the data
         )
@@ -314,7 +333,7 @@ if __name__ == '__main__':
         logger = Logger(options.verbosity, options.quiet)
         console = Console()
         if not options.verify:
-            # Disable warings of insecure connection for invalid cerificates
+            # Disable warnings of insecure connection for invalid cerificates
             requests.packages.urllib3.disable_warnings()
             # Allow use of deprecated and weak cipher methods
             requests.packages.urllib3.util.ssl_.DEFAULT_CIPHERS += ':HIGH:!DH:!aNULL'
