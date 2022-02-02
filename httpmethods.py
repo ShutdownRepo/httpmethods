@@ -280,7 +280,7 @@ def main(options, logger, console):
     if options.headers:
         headers = {h.split(':', 1)[0]: h.split(':', 1)[1].strip() for h in options.headers}
     else:
-        headers = []
+        headers = {}
 
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
