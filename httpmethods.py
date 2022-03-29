@@ -99,6 +99,14 @@ def get_options():
         help="Follow redirects (default: False)",
     )
     parser.add_argument(
+        '-s',
+        '--safe',
+        action="store_true",
+        default=None,
+        dest='safe',
+        help="Use only safe methods for requests (default: False)"
+    )
+    parser.add_argument(
         "-w",
         "--wordlist",
         dest="wordlist",
@@ -294,13 +302,14 @@ def main(options, logger, console):
     filtered_methods = []
     for method in methods:
         if method in ["DELETE", "COPY", "PUT", "PATCH", "UNCHECKOUT"]:
-            test_dangerous_method = console.input(
-                f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? \[y/N] ")
-            if not test_dangerous_method.lower() == "y":
-                logger.verbose(f"Method {method} will not be tested")
-            else:
-                logger.verbose(f"Method {method} will be tested")
-                filtered_methods.append(method)
+            if not options.safe:
+                test_dangerous_method = console.input(
+                    f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? \[y/N] ")
+                if not test_dangerous_method.lower() == "y":
+                    logger.verbose(f"Method {method} will not be tested")
+                else:
+                    logger.verbose(f"Method {method} will be tested")
+                    filtered_methods.append(method)
         else:
             filtered_methods.append(method)
     methods = filtered_methods[:]
