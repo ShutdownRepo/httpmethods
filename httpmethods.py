@@ -60,9 +60,20 @@ def get_options():
         formatter_class=argparse.RawTextHelpFormatter,
     )
 
-    parser.add_argument(
+    targets = parser.add_mutually_exclusive_group(required=True)
+    targets.add_argument(
         "url",
+        nargs="?",
+        default=None,
         help="e.g. https://example.com:port/path"
+    )
+    targets.add_argument(
+        "-f",
+        "--file",
+        dest="urls_file",
+        action="store",
+        default=None,
+        help="File containing a list of target URLs, one per line (use - for stdin)",
     )
     parser.add_argument(
         "-v",
@@ -182,18 +193,35 @@ def get_options():
 def methods_from_wordlist(wordlist):
     logger.verbose(f"Retrieving methods from wordlist {wordlist}")
     try:
-        with open(options.wordlist, "r") as infile:
-            methods += infile.read().split()
+        with open(wordlist, "r") as infile:
+            return infile.read().split()
     except Exception as e:
         logger.error(rf"Had some kind of error loading the wordlist ¯\_(ツ)_/¯: {e}")
+        return []
 
 
-def methods_from_http_options(console, options, proxies, headers, cookies):
+def urls_from_file(urls_file):
+    logger.verbose(f"Retrieving target URLs from {urls_file}")
+    try:
+        if urls_file == "-":
+            lines = sys.stdin.read().splitlines()
+        else:
+            with open(urls_file, "r") as infile:
+                lines = infile.read().splitlines()
+    except Exception as e:
+        logger.error(f"Could not read URLs file: {e}")
+        sys.exit(1)
+    # Ignoring empty lines and comments, keeping the order while removing duplicates
+    urls = [line.strip() for line in lines if line.strip() and not line.strip().startswith("#")]
+    return list(dict.fromkeys(urls))
+
+
+def methods_from_http_options(console, options, url, proxies, headers, cookies):
     options_methods = []
     logger.verbose("Pulling available methods from server with an OPTIONS request")
     try:
         r = requests.options(
-            url=options.url,
+            url=url,
             proxies=proxies,
             cookies=cookies,
             headers=headers,
@@ -230,11 +258,11 @@ def methods_from_http_options(console, options, proxies, headers, cookies):
     return options_methods
 
 
-def test_method(options, method, proxies, cookies, headers, results):
+def test_method(options, url, method, proxies, cookies, headers, results):
     try:
         r = requests.request(
             method=method,
-            url=options.url,
+            url=url,
             verify=options.verify,  # this is to set the client to accept insecure servers
             proxies=proxies,
             cookies=cookies,
@@ -245,6 +273,9 @@ def test_method(options, method, proxies, cookies, headers, results):
     except requests.exceptions.ProxyError:
         logger.error("Invalid proxy specified ")
         raise SystemExit
+    except requests.exceptions.RequestException as e:
+        logger.verbose(f"Request with method {method} to {url} failed: {e}")
+        return
     logger.debug(f"Obtained results: {method}, {str(r.status_code)}, {str(len(r.text))}, {r.reason}")
     results[method] = {"status_code": r.status_code, "length": len(r.text), "reason": r.reason[:100]}
 
@@ -319,49 +350,76 @@ def main(options, logger, console):
     else:
         headers = {}
 
+    if options.urls_file is not None:
+        urls = urls_from_file(options.urls_file)
+        if not urls:
+            logger.error("No target URL found in the specified file")
+            return
+        logger.info(f"Loaded {len(urls)} target URL(s)")
+    else:
+        urls = [options.url]
+
     if options.wordlist is not None:
         methods += methods_from_wordlist(options.wordlist)
-    methods += methods_from_http_options(console, options, proxies, headers, cookies)
 
-    # Sort uniq
-    methods = [m.upper() for m in methods]
-    methods = sorted(list(set(methods)))
+    # Answers to the dangerous methods prompt, kept so that each method is only asked once across all targets
+    dangerous_methods_choices = {}
 
-    # Filtering for dangerous methods
-    filtered_methods = []
-    for method in methods:
-        if method in ["DELETE", "COPY", "PUT", "PATCH", "UNCHECKOUT"]:
-            if not options.safe:
-                if options.auto_accept:
-                    test_dangerous_method = "y"
-                elif options.auto_refuse:
-                    test_dangerous_method = "n"
-                else:
-                    test_dangerous_method = console.input(
-                        f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? [y/N] ")
-                if not test_dangerous_method.lower() == "y":
-                    logger.verbose(f"Method {method} will not be tested")
-                else:
-                    logger.verbose(f"Method {method} will be tested")
-                    filtered_methods.append(method)
-        else:
-            filtered_methods.append(method)
-    methods = filtered_methods[:]
-    del filtered_methods
+    for url in urls:
+        if len(urls) > 1:
+            logger.info(f"Testing {url}")
+        url_results = {}
 
-    # Waits for all the threads to be completed
-    with ThreadPoolExecutor(max_workers=min(options.threads, len(methods))) as tp:
-        for method in methods:
-            tp.submit(test_method, options, method, proxies, cookies, headers, results)
+        try:
+            url_methods = methods + methods_from_http_options(console, options, url, proxies, headers, cookies)
+        except requests.exceptions.RequestException as e:
+            logger.error(f"Could not reach {url}: {e}")
+            continue
 
-    # Sorting the results by method name
-    results = {key: results[key] for key in sorted(results)}
+        # Sort uniq
+        url_methods = [m.upper() for m in url_methods]
+        url_methods = sorted(list(set(url_methods)))
 
-    # Parsing and print results
-    print_results(console, results)
+        # Filtering for dangerous methods
+        filtered_methods = []
+        for method in url_methods:
+            if method in ["DELETE", "COPY", "PUT", "PATCH", "UNCHECKOUT"]:
+                if not options.safe:
+                    if method not in dangerous_methods_choices:
+                        if options.auto_accept:
+                            test_dangerous_method = "y"
+                        elif options.auto_refuse:
+                            test_dangerous_method = "n"
+                        else:
+                            test_dangerous_method = console.input(
+                                f"[bold orange3][?][/bold orange3] Do you really want to test method {method} (can be dangerous)? [y/N] ")
+                        dangerous_methods_choices[method] = test_dangerous_method.lower() == "y"
+                    if not dangerous_methods_choices[method]:
+                        logger.verbose(f"Method {method} will not be tested")
+                    else:
+                        logger.verbose(f"Method {method} will be tested")
+                        filtered_methods.append(method)
+            else:
+                filtered_methods.append(method)
+        url_methods = filtered_methods[:]
+        del filtered_methods
 
-    # Export to JSON if specified
+        # Waits for all the threads to be completed
+        with ThreadPoolExecutor(max_workers=max(1, min(options.threads, len(url_methods)))) as tp:
+            for method in url_methods:
+                tp.submit(test_method, options, url, method, proxies, cookies, headers, url_results)
+
+        # Sorting the results by method name
+        url_results = {key: url_results[key] for key in sorted(url_results)}
+
+        # Parsing and print results
+        print_results(console, url_results)
+        results[url] = url_results
+
+    # Export to JSON if specified, keeping the original format when a single URL is given
     if options.jsonfile is not None:
+        if options.urls_file is None:
+            results = results.get(options.url, {})
         json_export(results, options.jsonfile)
 
 

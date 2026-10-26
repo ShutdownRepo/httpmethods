@@ -17,7 +17,14 @@ uv tool install git+https://github.com/ShutdownRepo/httpmethods
 ## Usage
 
 ```sh
-httpmethods -u http://www.example.com/
+httpmethods http://www.example.com/
+```
+
+Multiple targets can be tested by giving a file with one URL per line (empty lines and lines starting with `#` are ignored, use `-` to read from stdin):
+
+```sh
+httpmethods -f urls.txt
+cat urls.txt | httpmethods -f - -y
 ```
 
 You can find here a complete list of options :
@@ -25,7 +32,7 @@ You can find here a complete list of options :
 ```
 [~] HTTP Methods Tester, v1.1.3
 
-usage: httpmethods.py [-h] [-v] [-q] [-k] [-L] [-s] [-w WORDLIST] [-t THREADS] [-j JSONFILE] [-x PROXY] [-b COOKIES] [-H HEADERS] url
+usage: httpmethods.py [-h] [-v] [-q] [-k] [-L] [-s] [-w WORDLIST] [-t THREADS] [-j JSONFILE] [-x PROXY] [-b COOKIES] [-H HEADERS] [-y] [-n] (-f URLS_FILE | url)
 
 This Python script can be used for HTTP verb tampering to bypass forbidden access, and for HTTP methods enumeration to find dangerous enabled methods like PUT 
 
@@ -34,6 +41,8 @@ positional arguments:
 
 optional arguments:
   -h, --help            show this help message and exit
+  -f URLS_FILE, --file URLS_FILE
+                        File containing a list of target URLs, one per line (use - for stdin)
   -v, --verbose         verbosity level (-v for verbose, -vv for debug)
   -q, --quiet           Show no information at all
   -k, --insecure        Allow insecure server connections when using SSL (default: False)
